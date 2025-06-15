@@ -1,0 +1,13 @@
+# Core data processing
+pandas
+numpy
+
+
+
+
+# Visualization
+matplotlib
+seaborn
+
+# Testing
+pytest
