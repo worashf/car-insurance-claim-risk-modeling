@@ -1,4 +1,4 @@
 [core]
     remote = localstorage
 ['remote "localstorage"']
-    url = /Users/worash/Desktop/tenx/week3/data/insurance_dvc_storage
+    url = ../data-storage
