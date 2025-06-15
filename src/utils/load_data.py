@@ -30,12 +30,10 @@ def load_clean_data(file_path:str) -> pd.DataFrame:
         :param df:
         :return:
         """
-        logger.info(f"Loaded {len(df)} records from {file_path}.")
-
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File {file_path} not found.")
         try:
-            df = pd.read_csv(file_path, engine='python')
+            df = pd.read_csv(file_path,  sep=",", low_memory=False)
             logger.info(f"Loaded {len(df)} records from {file_path}.")
             return df
         except Exception as e:
