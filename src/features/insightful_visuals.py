@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
+import numpy as np
 from matplotlib.ticker import PercentFormatter
 from matplotlib.gridspec import GridSpec
 
@@ -11,15 +12,10 @@ def create_insightful_visuals(df: pd.DataFrame) -> None:
     1. Loss Ratio by Province (with profitability markers)
     2. Temporal trends in claims (dual-axis for frequency and severity)
     3. Vehicle make risk profile (normalized by frequency)
-
-    Parameters:
-    -----------
-    df : pd.DataFrame
-        Input DataFrame containing insurance claim data
     """
 
     # Set professional style
-    plt.style.use('seaborn')
+    sns.set_theme(style="whitegrid")
     sns.set_palette("viridis")
     plt.rcParams['figure.facecolor'] = 'white'
     plt.rcParams['axes.grid'] = True
@@ -33,13 +29,22 @@ def create_insightful_visuals(df: pd.DataFrame) -> None:
     # ----------------------------------
     ax1 = fig.add_subplot(gs[0, :])
 
-    # Calculate loss ratio
-    df['LossRatio'] = df['TotalClaims'] / df['TotalPremium']
-    province_loss = df.groupby('Province')['LossRatio'].mean().sort_values()
+    # Calculate loss ratio safely (handle division by zero)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        df['LossRatio'] = np.where(
+            df['TotalPremium'] > 0,
+            df['TotalClaims'] / df['TotalPremium'],
+            np.nan  # Set to NaN if premium is zero
+        )
+
+    # Filter out NaN values before grouping
+    province_loss = df[df['LossRatio'].notna()].groupby('Province')['LossRatio'].mean().sort_values()
 
     # Create bar plot with reference lines
+    # It's good practice to ensure consistent coloring if not mapping to a hue.
+    # Using a single color from the palette for simplicity here.
     bars = ax1.barh(province_loss.index, province_loss.values * 100,
-                    color=sns.color_palette("viridis", len(province_loss)))
+                    color=sns.color_palette("viridis", 1)[0])
 
     # Add reference lines and annotations
     ax1.axvline(100, color='red', linestyle='--', alpha=0.7, label='Break-even (100%)')
@@ -63,23 +68,24 @@ def create_insightful_visuals(df: pd.DataFrame) -> None:
     ax2 = fig.add_subplot(gs[1, :])
 
     # Prepare temporal data
-    df['Date'] = pd.to_datetime(df['Date'])
-    df['Month'] = df['Date'].dt.to_period('M').astype(str)
-    monthly_data = df.groupby('Month').agg(
+    df['TransactionMonth'] = pd.to_datetime(df['TransactionMonth'])
+    # Group by period and calculate mean for TotalClaims > 0
+    monthly_data = df.groupby(df['TransactionMonth'].dt.to_period('M')).agg(
         ClaimCount=('TotalClaims', 'count'),
-        AvgClaim=('TotalClaims', 'mean')
+        AvgClaim=('TotalClaims', lambda x: x[x > 0].mean()) # Ensure average is for claims > 0
     ).reset_index()
+    monthly_data['Month'] = monthly_data['TransactionMonth'].astype(str)
 
     # Create twin axes
     ax2b = ax2.twinx()
 
     # Plot claim frequency
     sns.lineplot(data=monthly_data, x='Month', y='ClaimCount',
-                 ax=ax2, color='teal', marker='o', label='Claim Frequency')
+                 ax=ax2, color='teal', marker='o', label='Claim Frequency', sort=False) # sort=False for period type
 
     # Plot average claim amount
     sns.lineplot(data=monthly_data, x='Month', y='AvgClaim',
-                 ax=ax2b, color='coral', marker='s', label='Average Claim Amount')
+                 ax=ax2b, color='coral', marker='s', label='Average Claim Amount', sort=False) # sort=False
 
     ax2.set_title('Temporal Trends in Insurance Claims', pad=20)
     ax2.set_ylabel('Number of Claims', color='teal')
@@ -99,20 +105,23 @@ def create_insightful_visuals(df: pd.DataFrame) -> None:
     ax3 = fig.add_subplot(gs[2, 0])
     ax4 = fig.add_subplot(gs[2, 1])
 
-    # Prepare vehicle data
-    top_makes = df['VehicleMake'].value_counts().nlargest(10).index
-    vehicle_data = df[df['VehicleMake'].isin(top_makes)]
+    # Prepare vehicle data - filter out zero claims
+    vehicle_data = df[df['TotalClaims'] > 0].copy()
+    top_makes = vehicle_data['make'].value_counts().nlargest(10).index
+    vehicle_data = vehicle_data[vehicle_data['make'].isin(top_makes)]
 
     # Plot 3a: Claim frequency by make
-    make_counts = vehicle_data['VehicleMake'].value_counts().sort_values()
-    make_counts.plot(kind='barh', ax=ax3, color=sns.color_palette("rocket"))
+    make_counts = vehicle_data['make'].value_counts().sort_values()
+    make_counts.plot(kind='barh', ax=ax3, color=sns.color_palette("rocket", len(make_counts)))
     ax3.set_title('Top 10 Vehicle Makes by Claim Frequency')
     ax3.set_xlabel('Number of Claims')
 
-    # Plot 3b: Normalized claim amount
-    sns.boxplot(data=vehicle_data, y='VehicleMake', x='TotalClaims',
+    # Plot 3b: Normalized claim amount (filter extreme values)
+    sns.boxplot(data=vehicle_data, y='make', x='TotalClaims',
                 ax=ax4, order=make_counts.index,
-                showfliers=False, palette="rocket_r")
+                showfliers=False, palette="rocket_r",
+                hue='make', legend=False)
+
     ax4.set_title('Claim Amount Distribution by Make')
     ax4.set_xlabel('Claim Amount (R)')
     ax4.set_ylabel('')
@@ -120,6 +129,6 @@ def create_insightful_visuals(df: pd.DataFrame) -> None:
     # Add super title
     fig.suptitle('Key Insurance Portfolio Insights', y=1.02, fontsize=16, fontweight='bold')
 
-    plt.tight_layout()
-    plt.show()
 
+
+    plt.show()
