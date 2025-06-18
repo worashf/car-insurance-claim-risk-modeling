@@ -241,9 +241,9 @@ Build three models:
 
 **Deliverables:**
 
-* Notebook: `notebooks/modeling.ipynb`
-* Python class: `scripts/dynamic_risk_pricing.py`
-* Visuals: Feature importances, confusion matrix, premium histograms
+* Notebooks
+* Python methods and class 
+* Visuals
 
 **KPIs:**
 
